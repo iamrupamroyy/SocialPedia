@@ -54,7 +54,7 @@ app.post('/api/auth/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({
       username: username.toLowerCase(),
-      email: email ? email.toLowerCase() : '',
+      email: (email && email.trim() !== '') ? email.toLowerCase() : null,
       password: hashedPassword,
       avatarColor: '#' + Math.floor(Math.random()*16777215).toString(16)
     });
