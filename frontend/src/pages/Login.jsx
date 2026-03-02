@@ -109,13 +109,13 @@ const Login = () => {
           <form onSubmit={handleSubmit}>
             <div className="auth-input-group">
               <label><User size={14} style={{marginRight:'5px'}}/> Username</label>
-              <input className="auth-input-field" type="text" placeholder="johndoe" value={username} onChange={(e) => setUsername(e.target.value)} required />
+              <input className="auth-input-field" type="text" placeholder="Enter your username" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </div>
 
             {isRegistering && (
               <div className="auth-input-group">
                 <label><Mail size={14} style={{marginRight:'5px'}}/> Email (Optional)</label>
-                <input className="auth-input-field" type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input className="auth-input-field" type="email" placeholder="Enter your email address" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <Info size={10} /> Email verification is currently under development.
                 </p>
