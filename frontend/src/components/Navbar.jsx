@@ -55,24 +55,19 @@ const Navbar = () => {
     return () => clearTimeout(timer);
   }, [search, user, token, API_URL]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
   return (
     <nav className="navbar">
-      <div className="nav-container-inner">
+      <div className={`nav-container-inner ${isMobileSearchOpen ? 'mobile-search-active' : ''}`}>
         {/* Left: Brand / Logo */}
-        <div className={`nav-left ${isMobileSearchOpen ? 'mobile-hidden' : ''}`}>
-          <Link to="/" className="nav-brand" style={{ gap: '0' }}>
+        <div className="nav-left">
+          <Link to="/" className="nav-brand" style={{ gap: '0' }} onClick={() => setIsMobileSearchOpen(false)}>
             <span className="brand-text">S</span>
             <Logo size="32px" className="nav-logo" style={{ margin: '0 -6px' }} />
             <span className="brand-text">cialPedia</span>
           </Link>
         </div>
 
-        {/* Center: Search (Desktop and Mobile Expandable) */}
+        {/* Center: Search (Desktop and Mobile Expandable Overlay) */}
         <div className={`nav-center ${isMobileSearchOpen ? 'mobile-visible' : ''}`} ref={searchRef}>
           <div className="search-container">
             <Search size={16} opacity={0.5} />
@@ -83,8 +78,8 @@ const Navbar = () => {
               onChange={(e) => setSearch(e.target.value)}
               autoFocus={isMobileSearchOpen}
             />
-            <button className="mobile-only search-close-btn" onClick={() => setIsMobileSearchOpen(false)}>
-              <X size={18} />
+            <button className="search-close-btn mobile-only" onClick={() => setIsMobileSearchOpen(false)}>
+              <X size={20} />
             </button>
           </div>
           {searchResults.length > 0 && (
@@ -102,24 +97,25 @@ const Navbar = () => {
         </div>
         
         {/* Right: Navigation Icons */}
-        <div className={`nav-right ${isMobileSearchOpen ? 'mobile-hidden' : ''}`}>
+        <div className="nav-right">
           {user ? (
             <div className="nav-links">
-              {/* Mobile Search Trigger */}
               <button className="nav-btn mobile-only" onClick={() => setIsMobileSearchOpen(true)}>
                 <Search size={20} />
               </button>
               
-              <Link to="/" className="nav-btn desktop-only"><Home size={20} /></Link>
-              <Link to="/reels" className="nav-btn"><Film size={20} /></Link>
+              <Link to="/reels" className="nav-btn desktop-only"><Film size={20} /></Link>
+              
               <Link to="/messages" className="nav-btn-wrapper nav-btn">
                 <MessageCircle size={20} />
-                {hasUnread && <div className="notification-dot">{unreadMessageCount > 0 ? unreadMessageCount : ''}</div>}
+                {unreadMessageCount > 0 && <div className="notification-dot">{unreadMessageCount}</div>}
               </Link>
+              
               <Link to="/notifications" className="nav-btn-wrapper nav-btn">
                 <Bell size={20} />
-                {hasUnreadNotifications && <div className="notification-dot">{unreadCount > 0 ? unreadCount : ''}</div>}
+                {unreadCount > 0 && <div className="notification-dot">{unreadCount}</div>}
               </Link>
+              
               <Link to={`/profile/${user.username}`} className="nav-btn profile-nav-link">
                 <div className="post-avatar" style={{ width: '24px', height: '24px', fontSize: '0.7rem', backgroundColor: user.avatarColor, overflow: 'hidden' }}>
                   {user.profilePhoto ? (
@@ -129,8 +125,8 @@ const Navbar = () => {
                   )}
                 </div>
               </Link>
-              <Link to="/settings" className="nav-btn desktop-only"><Settings size={20} /></Link>
-              <button onClick={handleLogout} className="nav-btn"><LogOut size={20} /></button>
+              
+              <Link to="/settings" className="nav-btn"><Settings size={20} /></Link>
             </div>
           ) : null}
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, MessageSquare, Share2, Trash2, Send, Reply, AtSign } from 'lucide-react';
+import { Heart, MessageSquare, Share2, Trash2, Send, Reply, AtSign, Bookmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -9,6 +9,7 @@ const Post = ({ post, onPostUpdate, onPostDelete, isHighlighted }) => {
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null); // comment id
   const [showLikesModal, setShowLikesModal] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
   
   // Mentions state for comments
   const [mentionSuggestions, setMentionSuggestions] = useState([]);
@@ -16,6 +17,28 @@ const Post = ({ post, onPostUpdate, onPostDelete, isHighlighted }) => {
   const [cursorPos, setCursorPos] = useState(0);
   const [allUsers, setAllUsers] = useState([]);
   const commentInputRef = useRef(null);
+
+  useEffect(() => {
+    if (user && post) {
+      const bookmarked = user.bookmarks?.some(id => id.toString() === (post._id || post.id)?.toString());
+      setIsBookmarked(bookmarked);
+    }
+  }, [user, post]);
+
+  const handleBookmark = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/posts/${postId}/bookmark`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setIsBookmarked(data.isBookmarked);
+      }
+    } catch (error) {
+      console.error("Error bookmarking:", error);
+    }
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -225,6 +248,10 @@ const Post = ({ post, onPostUpdate, onPostDelete, isHighlighted }) => {
         <button className="action-btn" onClick={() => {navigator.clipboard.writeText(`${window.location.origin}/post/${postId}`); alert("Link copied!"); }}>
           <Share2 size={20} />
           <span className="desktop-only">Share</span>
+        </button>
+        <button className="action-btn" onClick={handleBookmark} style={{ color: isBookmarked ? '#f59e0b' : 'inherit', opacity: isBookmarked ? 1 : 0.6 }}>
+          <Bookmark size={20} fill={isBookmarked ? '#f59e0b' : 'none'} />
+          <span className="desktop-only">{isBookmarked ? 'Saved' : 'Save'}</span>
         </button>
       </div>
 

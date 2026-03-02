@@ -39,21 +39,44 @@ const authenticate = (req, res, next) => {
 // Auth routes
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    const existingUser = await User.findOne({ username: username.toLowerCase() });
-    if (existingUser) return res.status(400).json({ message: 'User already exists' });
+    const { username, email, password } = req.body;
+    
+    // Check if username exists
+    const existingUsername = await User.findOne({ username: username.toLowerCase() });
+    if (existingUsername) return res.status(400).json({ message: 'Username already exists' });
+
+    // Check if email exists (only if email is provided and not empty)
+    if (email && email.trim() !== '') {
+      const existingEmail = await User.findOne({ email: email.toLowerCase() });
+      if (existingEmail) return res.status(400).json({ message: 'Email already exists' });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({
       username: username.toLowerCase(),
+      email: email ? email.toLowerCase() : '',
       password: hashedPassword,
       avatarColor: '#' + Math.floor(Math.random()*16777215).toString(16)
     });
     await newUser.save();
 
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET);
-    res.json({ token, user: { id: newUser._id.toString(), username: newUser.username, avatarColor: newUser.avatarColor } });
+    res.json({ 
+      token, 
+      user: { 
+        id: newUser._id.toString(), 
+        username: newUser.username, 
+        email: newUser.email,
+        avatarColor: newUser.avatarColor,
+        profilePhoto: newUser.profilePhoto,
+        bio: newUser.bio,
+        followers: [],
+        following: [],
+        bookmarks: []
+      } 
+    });
   } catch (error) {
+    console.error("Registration error:", error);
     res.status(500).json({ message: 'Error registering user', error: error.message });
   }
 });
@@ -68,9 +91,160 @@ app.post('/api/auth/login', async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-    res.json({ token, user: { id: user._id.toString(), username: user.username, avatarColor: user.avatarColor, profilePhoto: user.profilePhoto, bio: user.bio } });
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id.toString(), 
+        username: user.username, 
+        email: user.email,
+        avatarColor: user.avatarColor, 
+        profilePhoto: user.profilePhoto, 
+        bio: user.bio,
+        followers: user.followers,
+        following: user.following,
+        bookmarks: user.bookmarks
+      } 
+    });
   } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ message: 'Error logging in', error: error.message });
+  }
+});
+
+import nodemailer from 'nodemailer';
+
+// Configure Email Transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Forgot Password - With Real Email Sending
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ message: 'Username is required' });
+
+    const user = await User.findOne({ username: username.toLowerCase() });
+    if (!user || !user.email) return res.status(404).json({ message: 'No user found with a valid email address.' });
+
+    // Generate temp password
+    const tempPassword = Math.random().toString(36).slice(-8);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    const [name, domain] = user.email.split('@');
+    const maskedEmail = `${name.substring(0, 3)}**********@${domain}`;
+
+    // Actual Email Sending
+    const mailOptions = {
+      from: `"SocialPedia Security" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: 'Your Temporary Password - SocialPedia',
+      html: `
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #1877f2;">SocialPedia</h2>
+          <p>Hello <strong>${user.username}</strong>,</p>
+          <p>We received a request to recover your password. Here is your new temporary password:</p>
+          <div style="background: #f0f2f5; padding: 15px; text-align: center; font-size: 1.5rem; font-weight: bold; letter-spacing: 2px; color: #1c1e21; border-radius: 8px;">
+            ${tempPassword}
+          </div>
+          <p>Please log in immediately and change this password in your <strong>Settings</strong>.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 0.8rem; color: #888;">If you did not request this, please ignore this email or contact support.</p>
+        </div>
+      `
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`[SUCCESS] Real email sent to ${user.email}`);
+    } catch (mailError) {
+      console.error("[MAIL ERROR] Failed to send real email:", mailError);
+      console.log(`[FALLBACK] Temp Password for ${user.username}: ${tempPassword}`);
+    }
+
+    res.json({ message: `Success! Your temporary password has been sent to your registered email: ${maskedEmail}` });
+  } catch (error) {
+    console.error("Reset Password Error:", error);
+    res.status(500).json({ message: 'Error resetting password' });
+  }
+});
+
+app.patch('/api/auth/change-password', authenticate, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const user = await User.findById(req.userId);
+    
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Incorrect old password' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error changing password', error: error.message });
+  }
+});
+
+// User Activity Log
+app.get('/api/users/activity', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const userActions = [];
+
+    // 1. Fetch User's Posts
+    const myPosts = await Post.find({ author: req.userId }).sort({ timestamp: -1 }).limit(50);
+    myPosts.forEach(p => {
+      userActions.push({ 
+        id: `post-${p._id}`, 
+        type: 'post', 
+        text: `You shared a new post: "${p.content?.substring(0, 30)}${p.content?.length > 30 ? '...' : ''}"`, 
+        timestamp: p.timestamp 
+      });
+    });
+
+    // 2. Fetch User's Comments and Likes (Simplified by searching all posts)
+    // In a large app, you'd store these references on the User model
+    const allRecentPosts = await Post.find({
+      $or: [
+        { likes: req.userId },
+        { "comments.user": req.userId }
+      ]
+    }).populate('author', 'username').limit(100);
+
+    allRecentPosts.forEach(p => {
+      if (p.likes.includes(req.userId)) {
+        userActions.push({ 
+          id: `like-${p._id}`, 
+          type: 'like', 
+          text: `You liked ${p.author.username}'s post`, 
+          timestamp: p.timestamp // Note: Using post timestamp as simplified logic
+        });
+      }
+      p.comments.forEach(c => {
+        if (c.user.toString() === req.userId.toString()) {
+          userActions.push({ 
+            id: `comment-${c._id}`, 
+            type: 'comment', 
+            text: `You commented on ${p.author.username}'s post: "${c.text.substring(0, 20)}..."`, 
+            timestamp: c.timestamp 
+          });
+        }
+      });
+    });
+
+    const sorted = userActions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 50);
+    res.json(sorted);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching activity log', error: error.message });
   }
 });
 
@@ -82,10 +256,12 @@ app.get('/api/posts', authenticate, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
     const filter = {
       $or: [
         { author: req.userId },
-        { author: { $in: user.following } }
+        { author: { $in: user.following || [] } }
       ]
     };
 
@@ -242,6 +418,45 @@ app.post('/api/posts/:id/comment', authenticate, async (req, res) => {
   }
 });
 
+// Get trending tags
+app.get('/api/posts/trending/tags', authenticate, async (req, res) => {
+  try {
+    const posts = await Post.find({ timestamp: { $gt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } });
+    const tagCounts = {};
+    posts.forEach(post => {
+      if (post.content) {
+        const tags = post.content.match(/#\w+/g);
+        if (tags) {
+          tags.forEach(tag => {
+            const t = tag.toLowerCase();
+            tagCounts[t] = (tagCounts[t] || 0) + 1;
+          });
+        }
+      }
+    });
+    const trending = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([tag, count]) => ({ tag, count }));
+    res.json(trending);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching trending tags', error: error.message });
+  }
+});
+
+// Get all video posts for Reels
+app.get('/api/posts/type/video', authenticate, async (req, res) => {
+  try {
+    const posts = await Post.find({ mediaType: 'video' })
+      .populate('author', 'username avatarColor profilePhoto')
+      .populate('comments.user', 'username avatarColor profilePhoto')
+      .sort({ timestamp: -1 });
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching reels', error: error.message });
+  }
+});
+
 app.get('/api/posts/:id', authenticate, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
@@ -300,7 +515,7 @@ app.patch('/api/users/profile', authenticate, async (req, res) => {
     if (profilePhoto !== undefined) updates.profilePhoto = profilePhoto;
     if (bio !== undefined) updates.bio = bio;
 
-    const user = await User.findByIdAndUpdate(req.userId, updates, { new: true });
+    const user = await User.findByIdAndUpdate(req.userId, updates, { returnDocument: 'after' });
     res.json({ id: user._id, username: user.username, avatarColor: user.avatarColor, profilePhoto: user.profilePhoto, bio: user.bio });
   } catch (error) {
     res.status(500).json({ message: 'Error updating profile', error: error.message });
@@ -562,6 +777,41 @@ app.delete('/api/notifications', authenticate, async (req, res) => {
   }
 });
 
+
+// Get user's bookmarks
+app.get('/api/users/bookmarks', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).populate({
+      path: 'bookmarks',
+      populate: [
+        { path: 'author', select: 'username avatarColor profilePhoto' },
+        { path: 'comments.user', select: 'username avatarColor profilePhoto' }
+      ]
+    });
+    res.json(user.bookmarks.reverse());
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching bookmarks', error: error.message });
+  }
+});
+
+// Toggle bookmark
+app.post('/api/posts/:id/bookmark', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const isBookmarked = user.bookmarks.includes(req.params.id);
+    
+    if (isBookmarked) {
+      user.bookmarks = user.bookmarks.filter(id => id.toString() !== req.params.id);
+    } else {
+      user.bookmarks.push(req.params.id);
+    }
+    
+    await user.save();
+    res.json({ isBookmarked: !isBookmarked });
+  } catch (error) {
+    res.status(500).json({ message: 'Error bookmarking post', error: error.message });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Backend V2.2 running on http://localhost:${port}`);

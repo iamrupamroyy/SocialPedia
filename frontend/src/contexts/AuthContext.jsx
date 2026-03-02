@@ -23,7 +23,20 @@ export const AuthProvider = ({ children }) => {
     const savedUser = localStorage.getItem('socialpedia_user');
     if (savedUser && token) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        setUser(parsed);
+        
+        // Fetch fresh data from server to ensure email etc are up to date
+        fetch(`${API_URL}/api/users/profile/${parsed.username}`)
+          .then(res => res.json())
+          .then(freshUser => {
+            if (freshUser && freshUser.username) {
+              const updated = { ...parsed, ...freshUser, id: freshUser.id || freshUser._id };
+              setUser(updated);
+              localStorage.setItem('socialpedia_user', JSON.stringify(updated));
+            }
+          })
+          .catch(err => console.error("Error refreshing user data", err));
       } catch (e) {
         console.error("Error parsing saved user", e);
       }
@@ -130,18 +143,19 @@ export const AuthProvider = ({ children }) => {
         setUser(data.user);
         return { success: true };
       }
-      return { success: false, message: data.message };
+      return { success: false, message: data.message || 'Login failed' };
     } catch (error) {
-      return { success: false, message: 'Server error' };
+      console.error('Login Fetch Error:', error);
+      return { success: false, message: 'Server unreachable or error' };
     }
   };
 
-  const register = async (username, password) => {
+  const register = async (username, email, password) => {
     try {
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, email, password })
       });
       const data = await response.json();
       if (response.ok) {
@@ -151,9 +165,10 @@ export const AuthProvider = ({ children }) => {
         setUser(data.user);
         return { success: true };
       }
-      return { success: false, message: data.message };
+      return { success: false, message: data.message || 'Registration failed' };
     } catch (error) {
-      return { success: false, message: 'Server error' };
+      console.error('Registration Fetch Error:', error);
+      return { success: false, message: 'Server unreachable or error' };
     }
   };
 
@@ -162,6 +177,40 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('socialpedia_user');
     setToken(null);
     setUser(null);
+  };
+
+  const resetPassword = async (username) => {
+    try {
+      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+      const data = await response.json();
+      if (response.ok) return { success: true, message: data.message };
+      return { success: false, message: data.message };
+    } catch (error) {
+      return { success: false, message: 'Server error' };
+    }
+  };
+
+  const changePassword = async (oldPassword, newPassword) => {
+    if (!token) return { success: false, message: 'Not authenticated' };
+    try {
+      const response = await fetch(`${API_URL}/api/auth/change-password`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ oldPassword, newPassword })
+      });
+      const data = await response.json();
+      if (response.ok) return { success: true, message: data.message };
+      return { success: false, message: data.message };
+    } catch (error) {
+      return { success: false, message: 'Server error' };
+    }
   };
 
   const updateProfilePhoto = async (photoUrl) => {
@@ -274,7 +323,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ 
-      user, token, API_URL, login, register, logout, loading, 
+      user, token, API_URL, login, register, logout, resetPassword, changePassword, loading, 
       followUser, unfollowUser, getFollowStatus, getFollowStats, 
       hasUnread, hasUnreadNotifications, unreadCount, unreadMessageCount,
       markMessagesRead, markNotificationsRead, addNotification, clearNotifications, followUpdate,

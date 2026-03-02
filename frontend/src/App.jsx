@@ -10,7 +10,7 @@ import Profile from './pages/Profile';
 import Reels from './pages/Reels';
 import Messages from './pages/Messages';
 import Notifications from './pages/Notifications';
-import Settings from './pages/Settings';
+import SettingsPage from './pages/Settings';
 import PostView from './pages/PostView';
 
 const ProtectedRoute = ({ children }) => {
@@ -65,7 +65,7 @@ const AppContent = () => {
             path="/settings" 
             element={
               <ProtectedRoute>
-                <Settings />
+                <SettingsPage />
               </ProtectedRoute>
             } 
           />

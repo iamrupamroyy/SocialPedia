@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Post from '../components/Post';
-import { Send, Image as ImageIcon, X, UserPlus, RefreshCcw } from 'lucide-react';
+import { Send, Image as ImageIcon, X, UserPlus, RefreshCcw, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Timeline = () => {
@@ -9,6 +9,7 @@ const Timeline = () => {
   const [posts, setPosts] = useState([]);
   const [newPostContent, setNewPostContent] = useState('');
   const [suggestions, setSuggestions] = useState([]);
+  const [trendingTags, setTrendingTags] = useState([]);
   
   // Mentions state
   const [mentionSuggestions, setMentionSuggestions] = useState([]);
@@ -65,6 +66,20 @@ const Timeline = () => {
     }
   }, [token, API_URL]);
 
+  const fetchTrendingTags = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/posts/trending/tags`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTrendingTags(data);
+      }
+    } catch (error) {
+      console.error('Error fetching trending tags:', error);
+    }
+  }, [token, API_URL]);
+
   const fetchAllUsers = useCallback(async () => {
     if (!token) return;
     try {
@@ -85,8 +100,9 @@ const Timeline = () => {
       fetchPosts(1, false);
       fetchSuggestions();
       fetchAllUsers();
+      fetchTrendingTags();
     }
-  }, [token, fetchPosts, fetchSuggestions, fetchAllUsers]);
+  }, [token, fetchPosts, fetchSuggestions, fetchAllUsers, fetchTrendingTags]);
 
   const handleInputChange = (e) => {
     const val = e.target.value;
@@ -165,6 +181,7 @@ const Timeline = () => {
         setNewPostContent('');
         setSelectedMedia(null);
         setMediaType(null);
+        fetchTrendingTags(); // Refresh tags
       }
     } catch (error) {
       console.error('Error creating post:', error);
@@ -205,7 +222,8 @@ const Timeline = () => {
                 
                 {showMentions && (
                   <div className="mention-dropdown" style={{ top: '100%', left: '0', marginTop: '5px' }}>
-                    {mentionSuggestions.map(u => (                      <div key={u._id || u.id} className="mention-item" onClick={() => selectMention(u.username)}>
+                    {mentionSuggestions.map(u => (
+                      <div key={u._id || u.id} className="mention-item" onClick={() => selectMention(u.username)}>
                         <div className="post-avatar" style={{ width: '24px', height: '24px', fontSize: '0.7rem', backgroundColor: u.avatarColor, overflow: 'hidden' }}>
                           {u.profilePhoto ? <img src={u.profilePhoto} style={{width:'100%', height:'100%', objectFit: 'cover'}} alt="" /> : u.username[0].toUpperCase()}
                         </div>
@@ -218,13 +236,15 @@ const Timeline = () => {
             </div>
             
             {selectedMedia && (
-              <div className="media-preview-container">
-                <button type="button" className="remove-media" onClick={() => setSelectedMedia(null)}><X size={18} /></button>
-                {mediaType === 'image' ? (
-                  <img src={selectedMedia} className="media-preview" alt="Preview" />
-                ) : (
-                  <video src={selectedMedia} className="media-preview" />
-                )}
+              <div className="media-preview-container" style={{ padding: '0 20px 15px 75px' }}>
+                <div style={{ position: 'relative', width: 'fit-content', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                  <button type="button" className="remove-media" onClick={() => setSelectedMedia(null)} style={{ width: '24px', height: '24px' }}><X size={14} /></button>
+                  {mediaType === 'image' ? (
+                    <img src={selectedMedia} className="media-preview" style={{ maxHeight: '200px' }} alt="Preview" />
+                  ) : (
+                    <video src={selectedMedia} className="media-preview" style={{ maxHeight: '200px' }} />
+                  )}
+                </div>
               </div>
             )}
             
@@ -289,7 +309,25 @@ const Timeline = () => {
       </div>
 
       <div className="sidebar desktop-only">
-        <div className="card" style={{ position: 'sticky', top: '85px' }}>
+        {/* Trending Section */}
+        {trendingTags.length > 0 && (
+          <div className="card" style={{ marginBottom: '20px', position: 'sticky', top: '85px' }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <TrendingUp size={20} color="var(--primary-color)" />
+              Trending for you
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {trendingTags.map(item => (
+                <div key={item.tag} style={{ cursor: 'pointer' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>{item.tag}</div>
+                  <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{item.count} {item.count === 1 ? 'post' : 'posts'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="card" style={{ position: 'sticky', top: trendingTags.length > 0 ? '320px' : '85px' }}>
           <h3 style={{ fontSize: '1.1rem', marginBottom: '15px' }}>Suggestions for you</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             {suggestions.map(s => (

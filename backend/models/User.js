@@ -2,12 +2,14 @@ import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  email: { type: String, lowercase: true, trim: true, default: '' },
   password: { type: String, required: true },
   avatarColor: { type: String, default: '#3b82f6' },
   profilePhoto: { type: String, default: '' },
   bio: { type: String, default: '' },
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  bookmarks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
   createdAt: { type: Date, default: Date.now }
 });
 
